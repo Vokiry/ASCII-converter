@@ -26,22 +26,22 @@ pub fn detect_system_monospace_font() -> SystemFontInfo {
     #[cfg(target_os = "linux")]
     {
         // 1. Try fc-match for exact configured monospace font
-        if let Ok(output) = Command::new("fc-match").args(["-f", "%{file}|%{family}", "monospace"]).output() {
-            if output.status.success() {
-                let out_str = String::from_utf8_lossy(&output.stdout);
-                let parts: Vec<&str> = out_str.trim().split('|').collect();
-                if let Some(file_path) = parts.first() {
-                    let path = Path::new(file_path);
-                    if path.exists() {
-                        if let Ok(bytes) = std::fs::read(path) {
-                            let family = parts.get(1).copied().unwrap_or("Monospace");
-                            return SystemFontInfo {
-                                name: format!("{} (Системный)", family),
-                                path: Some(file_path.to_string()),
-                                font_bytes: bytes,
-                            };
-                        }
-                    }
+        if let Ok(output) = Command::new("fc-match").args(["-f", "%{file}|%{family}", "monospace"]).output()
+            && output.status.success()
+        {
+            let out_str = String::from_utf8_lossy(&output.stdout);
+            let parts: Vec<&str> = out_str.trim().split('|').collect();
+            if let Some(file_path) = parts.first() {
+                let path = Path::new(file_path);
+                if path.exists()
+                    && let Ok(bytes) = std::fs::read(path)
+                {
+                    let family = parts.get(1).copied().unwrap_or("Monospace");
+                    return SystemFontInfo {
+                        name: format!("{} (Системный)", family),
+                        path: Some(file_path.to_string()),
+                        font_bytes: bytes,
+                    };
                 }
             }
         }
@@ -58,15 +58,15 @@ pub fn detect_system_monospace_font() -> SystemFontInfo {
 
         for &path_str in &candidate_paths {
             let path = Path::new(path_str);
-            if path.exists() {
-                if let Ok(bytes) = std::fs::read(path) {
-                    let file_name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("System Mono");
-                    return SystemFontInfo {
-                        name: format!("{} (Системный)", file_name),
-                        path: Some(path_str.to_string()),
-                        font_bytes: bytes,
-                    };
-                }
+            if path.exists()
+                && let Ok(bytes) = std::fs::read(path)
+            {
+                let file_name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("System Mono");
+                return SystemFontInfo {
+                    name: format!("{} (Системный)", file_name),
+                    path: Some(path_str.to_string()),
+                    font_bytes: bytes,
+                };
             }
         }
     }

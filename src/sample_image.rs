@@ -16,19 +16,19 @@ pub fn generate_sample_image() -> DynamicImage {
             let dy = v - 0.5;
             let dist = (dx * dx + dy * dy).sqrt();
 
-            let mut r = (180.0 * (1.0 - dist) + 40.0 * (x as f32 * 0.05).sin()) as f32;
-            let mut g = (220.0 * (1.0 - dist * 1.2) + 50.0 * (y as f32 * 0.05).cos()) as f32;
-            let mut b = (255.0 * dist + 100.0 * u) as f32;
+            let mut r = 180.0 * (1.0 - dist) + 40.0 * (x as f32 * 0.05).sin();
+            let mut g = 220.0 * (1.0 - dist * 1.2) + 50.0 * (y as f32 * 0.05).cos();
+            let mut b = 255.0 * dist + 100.0 * u;
 
             // Retro computer monitor shape in center
-            if x >= 140 && x <= 372 && y >= 120 && y <= 352 {
+            if (140..=372).contains(&x) && (120..=352).contains(&y) {
                 // Monitor casing
                 r = 210.0;
                 g = 200.0;
                 b = 180.0;
 
                 // Inner CRT screen
-                if x >= 165 && x <= 347 && y >= 145 && y <= 327 {
+                if (165..=347).contains(&x) && (145..=327).contains(&y) {
                     let screen_u = (x - 165) as f32 / (347 - 165) as f32;
                     let screen_v = (y - 145) as f32 / (327 - 145) as f32;
 

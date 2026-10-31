@@ -95,12 +95,10 @@ impl AsciiConverter {
                                 }
                             }
                         }
-                        if count > 0 {
-                            colors.push(Rgb::new(
-                                (sum_r / count) as u8,
-                                (sum_g / count) as u8,
-                                (sum_b / count) as u8,
-                            ));
+                        if let Some(r) = sum_r.checked_div(count) {
+                            let g = sum_g / count;
+                            let b = sum_b / count;
+                            colors.push(Rgb::new(r as u8, g as u8, b as u8));
                         } else {
                             colors.push(Rgb::WHITE);
                         }

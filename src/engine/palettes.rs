@@ -21,6 +21,7 @@ impl CharPalette {
         }
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Self {
         let chars: Vec<char> = s.chars().collect();
         Self::new(&chars)

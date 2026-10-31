@@ -20,12 +20,12 @@ pub fn detect_edges(
             };
 
             // Sobel convolution
-            let gx = -1.0 * get(-1, -1) + 1.0 * get(1, -1)
+            let gx = -get(-1, -1) + get(1, -1)
                 - 2.0 * get(-1,  0) + 2.0 * get(1,  0)
-                - 1.0 * get(-1,  1) + 1.0 * get(1,  1);
+                - get(-1,  1) + get(1,  1);
 
-            let gy = 1.0 * get(-1, -1) + 2.0 * get(0, -1) + 1.0 * get(1, -1)
-                - 1.0 * get(-1,  1) - 2.0 * get(0,  1) - 1.0 * get(1,  1);
+            let gy = get(-1, -1) + 2.0 * get(0, -1) + get(1, -1)
+                - get(-1,  1) - 2.0 * get(0,  1) - get(1,  1);
 
             let magnitude = (gx * gx + gy * gy).sqrt();
 
@@ -33,7 +33,7 @@ pub fn detect_edges(
                 let angle = gy.atan2(gx).to_degrees().abs(); // 0 to 180
 
                 // Map angle to directional stroke
-                let ch = if angle >= 67.5 && angle <= 112.5 {
+                let ch = if (67.5..=112.5).contains(&angle) {
                     '-'
                 } else if angle <= 22.5 || angle >= 157.5 {
                     '|'

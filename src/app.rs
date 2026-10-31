@@ -134,15 +134,15 @@ impl AsciiApp {
         let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
         let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("file").to_string();
 
-        if ext == "gif" {
-            if let Ok(bytes) = std::fs::read(path) {
-                if let Err(e) = self.load_gif_bytes(&bytes, Some(name), ctx) {
-                    self.show_toast(format!("Ошибка загрузки GIF: {}", e));
-                } else {
-                    self.show_toast("Анимированный GIF успешно загружен!".to_string());
-                }
-                return;
+        if ext == "gif"
+            && let Ok(bytes) = std::fs::read(path)
+        {
+            if let Err(e) = self.load_gif_bytes(&bytes, Some(name), ctx) {
+                self.show_toast(format!("Ошибка загрузки GIF: {}", e));
+            } else {
+                self.show_toast("Анимированный GIF успешно загружен!".to_string());
             }
+            return;
         }
 
         match image::open(path) {
@@ -234,7 +234,7 @@ impl AsciiApp {
     pub fn copy_markdown_to_clipboard(&mut self) {
         if let Some(frame) = &self.current_ascii_frame {
             let md = frame.to_markdown();
-            if let Ok(_) = ClipboardHelper::copy_text(&md) {
+            if ClipboardHelper::copy_text(&md).is_ok() {
                 self.show_toast("✅ Markdown код скопирован в буфер обмена!".to_string());
             }
         }
@@ -408,11 +408,11 @@ impl eframe::App for AsciiApp {
                 let path = file.path();
                 if path.is_file() {
                     self.load_file_from_path(path, &ctx);
-                } else if let Ok(bytes) = file.bytes() {
-                    if let Ok(img) = image::load_from_memory(&bytes) {
-                        self.load_dynamic_image(img, Some("Перетащенный файл".to_string()), &ctx);
-                        self.show_toast("Файл загружен!".to_string());
-                    }
+                } else if let Ok(bytes) = file.bytes()
+                    && let Ok(img) = image::load_from_memory(&bytes)
+                {
+                    self.load_dynamic_image(img, Some("Перетащенный файл".to_string()), &ctx);
+                    self.show_toast("Файл загружен!".to_string());
                 }
             }
 
@@ -424,13 +424,12 @@ impl eframe::App for AsciiApp {
                 if i.key_pressed(Key::C) {
                     self.copy_text_to_clipboard();
                 }
-                if i.key_pressed(Key::O) {
-                    if let Some(path) = rfd::FileDialog::new()
+                if i.key_pressed(Key::O)
+                    && let Some(path) = rfd::FileDialog::new()
                         .add_filter("Изображения", &["png", "jpg", "jpeg", "webp", "gif", "bmp"])
                         .pick_file()
-                    {
-                        self.load_file_from_path(&path, &ctx);
-                    }
+                {
+                    self.load_file_from_path(&path, &ctx);
                 }
                 if i.key_pressed(Key::S) {
                     self.save_file_dialog();
@@ -446,28 +445,27 @@ impl eframe::App for AsciiApp {
                 }
             }
 
-            if i.key_pressed(Key::Space) {
-                if self.gif_animation.is_some() {
-                    self.is_playing = !self.is_playing;
-                }
+            if i.key_pressed(Key::Space) && self.gif_animation.is_some() {
+                self.is_playing = !self.is_playing;
             }
         });
 
         // Animated GIF timer
-        if let Some(gif) = &self.gif_animation {
-            if self.is_playing && !gif.frames.is_empty() {
-                let duration = gif.frames.get(self.current_frame_idx).map(|f| f.1).unwrap_or(Duration::from_millis(100));
-                if self.last_frame_time.elapsed() >= duration {
-                    self.current_frame_idx = (self.current_frame_idx + 1) % gif.frames.len();
-                    self.last_frame_time = Instant::now();
-                    if let Some(frame) = gif.ascii_frames.get(self.current_frame_idx) {
-                        self.cached_text = frame.to_text();
-                        self.current_ascii_frame = Some(frame.clone());
-                    }
-                    ctx.request_repaint();
-                } else {
-                    ctx.request_repaint_after(duration.saturating_sub(self.last_frame_time.elapsed()));
+        if let Some(gif) = &self.gif_animation
+            && self.is_playing
+            && !gif.frames.is_empty()
+        {
+            let duration = gif.frames.get(self.current_frame_idx).map(|f| f.1).unwrap_or(Duration::from_millis(100));
+            if self.last_frame_time.elapsed() >= duration {
+                self.current_frame_idx = (self.current_frame_idx + 1) % gif.frames.len();
+                self.last_frame_time = Instant::now();
+                if let Some(frame) = gif.ascii_frames.get(self.current_frame_idx) {
+                    self.cached_text = frame.to_text();
+                    self.current_ascii_frame = Some(frame.clone());
                 }
+                ctx.request_repaint();
+            } else {
+                ctx.request_repaint_after(duration.saturating_sub(self.last_frame_time.elapsed()));
             }
         }
 
@@ -485,13 +483,12 @@ impl eframe::App for AsciiApp {
                 ui.separator();
 
                 // Open file
-                if ui.button(RichText::new("📂 Открыть").size(14.0)).on_hover_text("Открыть картинку или GIF (Ctrl+O)").clicked() {
-                    if let Some(path) = rfd::FileDialog::new()
+                if ui.button(RichText::new("📂 Открыть").size(14.0)).on_hover_text("Открыть картинку или GIF (Ctrl+O)").clicked()
+                    && let Some(path) = rfd::FileDialog::new()
                         .add_filter("Изображения", &["png", "jpg", "jpeg", "webp", "gif", "bmp"])
                         .pick_file()
-                    {
-                        self.load_file_from_path(&path, &ctx);
-                    }
+                {
+                    self.load_file_from_path(&path, &ctx);
                 }
 
                 // Paste from clipboard
@@ -580,15 +577,15 @@ impl eframe::App for AsciiApp {
                 }
 
                 // Toast notification
-                if let Some((msg, time)) = &self.toast {
-                    if time.elapsed() < Duration::from_secs(3) {
-                        let alpha = ((3.0 - time.elapsed().as_secs_f32()) / 0.5).clamp(0.0, 1.0);
-                        let bg_color = Color32::from_rgba_unmultiplied(40, 160, 80, (alpha * 255.0) as u8);
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.label(RichText::new(msg).color(Color32::WHITE).background_color(bg_color).strong().size(13.0));
-                        });
-                        ctx.request_repaint();
-                    }
+                if let Some((msg, time)) = &self.toast
+                    && time.elapsed() < Duration::from_secs(3)
+                {
+                    let alpha = ((3.0 - time.elapsed().as_secs_f32()) / 0.5).clamp(0.0, 1.0);
+                    let bg_color = Color32::from_rgba_unmultiplied(40, 160, 80, (alpha * 255.0) as u8);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.label(RichText::new(msg).color(Color32::WHITE).background_color(bg_color).strong().size(13.0));
+                    });
+                    ctx.request_repaint();
                 }
             });
             ui.add_space(2.0);

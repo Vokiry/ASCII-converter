@@ -27,7 +27,7 @@ impl GifAnimation {
         let mut extracted = Vec::with_capacity(frames.len());
         for frame in frames {
             let (num, denom) = frame.delay().numer_denom_ms();
-            let ms = if denom > 0 { num / denom } else { 100 };
+            let ms = num.checked_div(denom).unwrap_or(100);
             let duration = Duration::from_millis(ms.max(20) as u64);
             let dynamic_img = DynamicImage::ImageRgba8(frame.into_buffer());
             extracted.push((dynamic_img, duration));
