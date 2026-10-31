@@ -256,6 +256,70 @@ impl AsciiApp {
         }
     }
 
+    /// Dedicated dialog to export animated GIF
+    pub fn export_gif_dialog(&mut self) {
+        let anim = match &self.gif_animation {
+            Some(a) => a,
+            None => {
+                self.show_toast("Анимация не загружена!".to_string());
+                return;
+            }
+        };
+
+        let mut opts = self.render_options.clone();
+        opts.color_mode = self.config.color_mode;
+
+        let dialog = rfd::FileDialog::new()
+            .set_file_name("ascii_animation.gif")
+            .add_filter("Анимированный GIF (*.gif)", &["gif"]);
+
+        if let Some(path) = dialog.save_file() {
+            match anim.export_to_gif(&self.font_info.font_bytes, &opts) {
+                Ok(bytes) => {
+                    if let Err(e) = std::fs::write(&path, bytes) {
+                        self.show_toast(format!("Ошибка записи файла: {}", e));
+                    } else {
+                        self.show_toast(format!("🎬 Анимированный GIF сохранён: {:?}", path.file_name().unwrap_or_default()));
+                    }
+                }
+                Err(e) => {
+                    self.show_toast(format!("Ошибка экспорта GIF: {}", e));
+                }
+            }
+        }
+    }
+
+    /// Dedicated dialog to export animated HTML
+    pub fn export_animated_html_dialog(&mut self) {
+        let anim = match &self.gif_animation {
+            Some(a) => a,
+            None => {
+                self.show_toast("Анимация не загружена!".to_string());
+                return;
+            }
+        };
+
+        let opts = self.render_options.clone();
+        let dialog = rfd::FileDialog::new()
+            .set_file_name("ascii_animation.html")
+            .add_filter("Интерактивная HTML-анимация (*.html)", &["html", "htm"]);
+
+        if let Some(path) = dialog.save_file() {
+            match anim.export_to_animated_html(opts.background, self.config.color_mode) {
+                Ok(html) => {
+                    if let Err(e) = std::fs::write(&path, html.as_bytes()) {
+                        self.show_toast(format!("Ошибка записи HTML: {}", e));
+                    } else {
+                        self.show_toast(format!("🌐 Анимированная веб-страница сохранена: {:?}", path.file_name().unwrap_or_default()));
+                    }
+                }
+                Err(e) => {
+                    self.show_toast(format!("Ошибка генерации HTML: {}", e));
+                }
+            }
+        }
+    }
+
     /// Saves ASCII art to file with dialog
     pub fn save_file_dialog(&mut self) {
         let frame = match &self.current_ascii_frame {
@@ -269,23 +333,52 @@ impl AsciiApp {
         let mut opts = self.render_options.clone();
         opts.color_mode = self.config.color_mode;
 
-        let dialog = rfd::FileDialog::new()
-            .set_file_name("ascii_art")
-            .add_filter("PNG Изображение (*.png)", &["png"])
-            .add_filter("Текстовый файл (*.txt)", &["txt"])
-            .add_filter("HTML веб-страница (*.html)", &["html", "htm"])
-            .add_filter("SVG Векторная графика (*.svg)", &["svg"])
-            .add_filter("JPEG Изображение (*.jpg)", &["jpg", "jpeg"]);
+        let has_gif = self.gif_animation.is_some();
+        let mut dialog = rfd::FileDialog::new();
+        if has_gif {
+            dialog = dialog
+                .set_file_name("ascii_animation.gif")
+                .add_filter("Анимированный GIF (*.gif)", &["gif"])
+                .add_filter("Интерактивная HTML-анимация (*.html)", &["html", "htm"])
+                .add_filter("PNG Изображение кадра (*.png)", &["png"])
+                .add_filter("JPEG Изображение кадра (*.jpg)", &["jpg", "jpeg"])
+                .add_filter("Текстовый файл кадра (*.txt)", &["txt"]);
+        } else {
+            dialog = dialog
+                .set_file_name("ascii_art")
+                .add_filter("PNG Изображение (*.png)", &["png"])
+                .add_filter("Текстовый файл (*.txt)", &["txt"])
+                .add_filter("HTML веб-страница (*.html)", &["html", "htm"])
+                .add_filter("SVG Векторная графика (*.svg)", &["svg"])
+                .add_filter("JPEG Изображение (*.jpg)", &["jpg", "jpeg"]);
+        }
 
         if let Some(path) = dialog.save_file() {
             let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("png").to_lowercase();
             let res = match ext.as_str() {
+                "gif" => {
+                    if let Some(anim) = &self.gif_animation {
+                        match anim.export_to_gif(&self.font_info.font_bytes, &opts) {
+                            Ok(bytes) => std::fs::write(&path, bytes).map_err(|e| e.to_string()),
+                            Err(e) => Err(e),
+                        }
+                    } else {
+                        Err("Анимация не загружена".to_string())
+                    }
+                }
+                "html" | "htm" => {
+                    if let Some(anim) = &self.gif_animation {
+                        match anim.export_to_animated_html(opts.background, self.config.color_mode) {
+                            Ok(html) => std::fs::write(&path, html.as_bytes()).map_err(|e| e.to_string()),
+                            Err(e) => Err(e),
+                        }
+                    } else {
+                        let html = frame.to_html(opts.background, self.config.color_mode);
+                        std::fs::write(&path, html.as_bytes()).map_err(|e| e.to_string())
+                    }
+                }
                 "txt" => std::fs::write(&path, self.cached_text.as_bytes())
                     .map_err(|e| e.to_string()),
-                "html" | "htm" => {
-                    let html = frame.to_html(opts.background, self.config.color_mode);
-                    std::fs::write(&path, html.as_bytes()).map_err(|e| e.to_string())
-                }
                 "svg" => {
                     let svg = frame.to_svg(opts.background, &self.font_info.name);
                     std::fs::write(&path, svg.as_bytes()).map_err(|e| e.to_string())
@@ -496,11 +589,18 @@ impl eframe::App for AsciiApp {
                     self.paste_from_clipboard(&ctx);
                 }
 
-                // Load sample
+                // Load sample image
                 if ui.button(RichText::new("🧪 Пример").size(14.0)).on_hover_text("Загрузить встроенное тестовое изображение").clicked() {
                     let sample = generate_sample_image();
                     self.load_dynamic_image(sample, Some("Пример (Компьютер CRT)".to_string()), &ctx);
                     self.show_toast("Загружен пример изображения!".to_string());
+                }
+
+                // Load sample animated GIF
+                if ui.button(RichText::new("🎬 Пример GIF").size(14.0)).on_hover_text("Загрузить тестовую анимацию GIF (Радар)").clicked() {
+                    let gif_bytes = crate::sample_image::generate_sample_gif();
+                    let _ = self.load_gif_bytes(&gif_bytes, Some("Пример GIF (Радар CRT)".to_string()), &ctx);
+                    self.show_toast("Загружена тестовая GIF анимация!".to_string());
                 }
 
                 ui.separator();
@@ -526,8 +626,29 @@ impl eframe::App for AsciiApp {
                 }
 
                 // Save file button
-                if ui.button(RichText::new("💾 Сохранить файл...").size(14.0)).on_hover_text("Сохранить в PNG, TXT, HTML или SVG (Ctrl+S)").clicked() {
+                if ui.button(RichText::new("💾 Сохранить файл...").size(14.0)).on_hover_text("Сохранить в GIF, PNG, TXT, HTML или SVG (Ctrl+S)").clicked() {
                     self.save_file_dialog();
+                }
+
+                // Dedicated GIF export button in top bar if GIF is active
+                if self.gif_animation.is_some() {
+                    ui.separator();
+                    let export_gif_btn = ui.add(
+                        egui::Button::new(
+                            RichText::new("🎬 ЭКСПОРТ GIF")
+                                .size(14.0)
+                                .strong()
+                                .color(Color32::WHITE),
+                        )
+                        .fill(Color32::from_rgb(130, 45, 180)),
+                    );
+                    if export_gif_btn.on_hover_text("Экспортировать динамическую ASCII-анимацию в файл GIF").clicked() {
+                        self.export_gif_dialog();
+                    }
+
+                    if ui.button(RichText::new("🌐 HTML-анимация").size(14.0)).on_hover_text("Экспортировать интерактивную HTML-страницу с анимацией").clicked() {
+                        self.export_animated_html_dialog();
+                    }
                 }
 
                 ui.separator();
@@ -824,6 +945,45 @@ impl eframe::App for AsciiApp {
                                 }
                             }
                         });
+
+                        ui.add_space(8.0);
+                        let mut export_gif = false;
+                        let mut export_html = false;
+
+                        if ui.add_sized(
+                            [ui.available_width(), 30.0],
+                            egui::Button::new(
+                                RichText::new("🎬 Экспорт анимированного GIF (.gif)")
+                                    .strong()
+                                    .color(Color32::WHITE),
+                            )
+                            .fill(Color32::from_rgb(130, 45, 180)),
+                        )
+                        .on_hover_text("Экспортировать динамическую ASCII-анимацию в файл GIF")
+                        .clicked()
+                        {
+                            export_gif = true;
+                        }
+
+                        ui.add_space(3.0);
+                        if ui.add_sized(
+                            [ui.available_width(), 26.0],
+                            egui::Button::new(
+                                RichText::new("🌐 Экспорт интерактивного HTML (.html)").size(13.0),
+                            ),
+                        )
+                        .on_hover_text("Экспортировать в интерактивную веб-страницу с анимацией")
+                        .clicked()
+                        {
+                            export_html = true;
+                        }
+
+                        if export_gif {
+                            self.export_gif_dialog();
+                        }
+                        if export_html {
+                            self.export_animated_html_dialog();
+                        }
                     }
 
                     ui.add_space(20.0);
@@ -847,6 +1007,16 @@ impl eframe::App for AsciiApp {
                 }
                 if ui.button("🖼️ Скопировать как PNG").clicked() {
                     self.copy_image_to_clipboard();
+                }
+
+                if self.gif_animation.is_some() {
+                    ui.separator();
+                    if ui.button(RichText::new("🎬 Экспорт GIF").strong().color(Color32::from_rgb(220, 150, 255))).clicked() {
+                        self.export_gif_dialog();
+                    }
+                    if ui.button("🌐 Экспорт HTML").clicked() {
+                        self.export_animated_html_dialog();
+                    }
                 }
             });
 
@@ -883,10 +1053,16 @@ impl eframe::App for AsciiApp {
                             ui.label(RichText::new("или нажмите Ctrl+V для вставки из буфера обмена").color(Color32::LIGHT_BLUE));
                             ui.add_space(10.0);
 
-                            if ui.button(RichText::new("Загрузить пример изображения").size(16.0)).clicked() {
-                                let sample = generate_sample_image();
-                                self.load_dynamic_image(sample, Some("Пример".to_string()), &ctx);
-                            }
+                            ui.horizontal(|ui| {
+                                if ui.button(RichText::new("🧪 Пример картинки").size(15.0)).clicked() {
+                                    let sample = generate_sample_image();
+                                    self.load_dynamic_image(sample, Some("Пример (Компьютер CRT)".to_string()), &ctx);
+                                }
+                                if ui.button(RichText::new("🎬 Пример GIF-анимации").size(15.0)).clicked() {
+                                    let gif_bytes = crate::sample_image::generate_sample_gif();
+                                    let _ = self.load_gif_bytes(&gif_bytes, Some("Пример GIF (Радар CRT)".to_string()), &ctx);
+                                }
+                            });
                         });
                     });
                 }

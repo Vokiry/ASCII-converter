@@ -132,3 +132,32 @@ fn test_export_formats_content_validity() {
     assert!(svg.contains("<text font-family=\"Noto Sans Mono\""));
     assert!(svg.contains("</svg>"));
 }
+
+#[test]
+fn test_sample_gif_and_animated_html_export() {
+    let gif_bytes = ascii_converter::sample_image::generate_sample_gif();
+    assert!(!gif_bytes.is_empty());
+    assert_eq!(&gif_bytes[0..3], b"GIF");
+
+    let mut anim = GifAnimation::from_bytes(&gif_bytes).expect("Sample GIF decoding failed");
+    assert_eq!(anim.frames.len(), 12);
+
+    let config = ConversionConfig {
+        width: 25,
+        aspect_ratio: 0.5,
+        color_mode: ColorMode::GreenPhosphor,
+        ..Default::default()
+    };
+    anim.update_ascii_frames(&config);
+    assert_eq!(anim.ascii_frames.len(), 12);
+
+    // Test animated HTML export
+    let html = anim
+        .export_to_animated_html(Rgb::BLACK, ColorMode::GreenPhosphor)
+        .expect("Failed to export animated HTML");
+    assert!(html.contains("<!DOCTYPE html>"));
+    assert!(html.contains("const frameContents = ["));
+    assert!(html.contains("const frameDelays = ["));
+    assert!(html.contains("function togglePlay()"));
+    assert!(html.contains("asciiDisplay"));
+}
