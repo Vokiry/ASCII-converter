@@ -57,12 +57,6 @@ jobs:
         run: |
           mkdir -p artifacts
           cp target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }} artifacts/${{ matrix.platform.name }}
-          cd artifacts
-          if command -v sha256sum &> /dev/null; then
-            sha256sum ${{ matrix.platform.name }} > ${{ matrix.platform.name }}.sha256
-          elif command -v shasum &> /dev/null; then
-            shasum -a 256 ${{ matrix.platform.name }} > ${{ matrix.platform.name }}.sha256
-          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -86,14 +80,16 @@ jobs:
 
       - name: Compute consolidated SHA256SUMS and archive source
         run: |
+          # 1. Create source code archive safely in /tmp to prevent tar self-inclusion
+          tar -czf /tmp/ascii-studio-source-${{ github.ref_name }}.tar.gz \
+            --exclude='.git' --exclude='target' --exclude='release-assets' .
+          mv /tmp/ascii-studio-source-${{ github.ref_name }}.tar.gz release-assets/
+
+          # 2. Compute consolidated SHA256SUMS for all release files
           cd release-assets
-          # Generate combined checksums file for all binaries
-          sha256sum ascii-studio-* > SHA256SUMS.txt || true
+          rm -f SHA256SUMS.txt *.sha256
+          sha256sum * > SHA256SUMS.txt
           cat SHA256SUMS.txt
-          cd ..
-          # Create source code archive
-          tar -czf release-assets/ascii-studio-source-${{ github.ref_name }}.tar.gz \
-            --exclude='.git' --exclude='target' .
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
