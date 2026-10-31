@@ -1,4 +1,4 @@
-name: Release Builds
+name: Release
 
 on:
   push:
@@ -6,9 +6,12 @@ on:
       - 'v*'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
-    name: Build - ${{ matrix.platform.os_name }}
+    name: Build - ${{ matrix.platform.name }}
     runs-on: ${{ matrix.platform.os }}
     strategy:
       fail-fast: false
@@ -24,11 +27,16 @@ jobs:
             target: x86_64-pc-windows-msvc
             bin: ascii-converter.exe
             name: ascii-studio-windows-x86_64.exe
-          - os_name: macOS-Universal
+          - os_name: macOS-AppleSilicon
             os: macos-latest
             target: aarch64-apple-darwin
             bin: ascii-converter
-            name: ascii-studio-macos-apple-silicon
+            name: ascii-studio-macos-aarch64
+          - os_name: macOS-Intel
+            os: macos-13
+            target: x86_64-apple-darwin
+            bin: ascii-converter
+            name: ascii-studio-macos-x86_64
 
     steps:
       - name: Checkout repository
@@ -49,14 +57,54 @@ jobs:
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.platform.target }}
 
-      - name: Rename binary
+      - name: Prepare binary artifact
         shell: bash
         run: |
-          mkdir -p dist
-          cp target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }} dist/${{ matrix.platform.name }}
+          mkdir -p artifacts
+          cp target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }} artifacts/${{ matrix.platform.name }}
+          cd artifacts
+          if command -v sha256sum &> /dev/null; then
+            sha256sum ${{ matrix.platform.name }} > ${{ matrix.platform.name }}.sha256
+          elif command -v shasum &> /dev/null; then
+            shasum -a 256 ${{ matrix.platform.name }} > ${{ matrix.platform.name }}.sha256
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform.name }}
-          path: dist/${{ matrix.platform.name }}
+          path: artifacts/*
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Compute consolidated SHA256SUMS and archive source
+        run: |
+          cd release-assets
+          # Generate combined checksums file for all binaries
+          sha256sum ascii-studio-* > SHA256SUMS.txt || true
+          cat SHA256SUMS.txt
+          cd ..
+          # Create source code archive
+          tar -czf release-assets/ascii-studio-source-${{ github.ref_name }}.tar.gz \
+            --exclude='.git' --exclude='target' .
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*
+          name: "ASCII Studio ${{ github.ref_name }}"
+          generate_release_notes: true
+          draft: false
+          prerelease: false
