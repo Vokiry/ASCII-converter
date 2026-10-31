@@ -32,11 +32,6 @@ jobs:
             target: aarch64-apple-darwin
             bin: ascii-converter
             name: ascii-studio-macos-aarch64
-          - os_name: macOS-Intel
-            os: macos-13
-            target: x86_64-apple-darwin
-            bin: ascii-converter
-            name: ascii-studio-macos-x86_64
 
     steps:
       - name: Checkout repository
